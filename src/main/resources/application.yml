@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: fast-claim-agent-api
+  datasource:
+    url: jdbc:h2:mem:claimdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+embabel:
+  models:
+    default-llm: deepseek-chat
+    llms:
+      fast: deepseek-chat
+      balanced: deepseek-chat
+      powerful: deepseek-reasoner
+      best: deepseek-reasoner
+  agent:
+    platform:
+      models:
+        deepseek:
+          api-key: ${DEEPSEEK_API_KEY}
+    agent-platform:
+      scanning:
+        annotation: true
+        bean: true
+  observability:
+    enabled: false
+
+claim:
+  rag:
+    documents-path: classpath:documents/
+    documents: claims_guide.md,faq.md
+    auto-ingest: true
+    lucene:
+      name: claim-lucene
+      chunk-size: 1000
+      chunk-overlap: 200
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.fastclaim: DEBUG
+    com.embabel.agent: DEBUG
