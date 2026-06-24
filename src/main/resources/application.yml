@@ -35,15 +35,24 @@ embabel:
   observability:
     enabled: false
 
-claim:
+insurance:
   rag:
     documents-path: classpath:documents/
-    documents: claims_guide.md,faq.md
+    documents: comprehensive_vehicle_insurance.md,claims_guide.md,faq.md
     auto-ingest: true
     lucene:
-      name: claim-lucene
+      name: insurance-lucene
       chunk-size: 1000
       chunk-overlap: 200
+
+chat:
+  session:
+    ttl-minutes: 30
+    max-history-rounds: 20
+    cleanup-interval-ms: 300000
+  cache:
+    ttl-minutes: 5
+    cleanup-interval-ms: 300000
 
 server:
   port: 8080

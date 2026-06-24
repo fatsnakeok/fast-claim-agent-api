@@ -113,7 +113,7 @@ public class DocumentIngestionService {
         String filename = resource.getFilename();
         log.debug("摄入文档: {}", filename);
         MaterializedDocument doc = contentReader.parseContent(resource.getInputStream(), filename);
-        luceneSearchOperations.save(doc);
+        luceneSearchOperations.writeAndChunkDocument(doc);
     }
 
     private Resource[] loadDocuments() throws IOException {
