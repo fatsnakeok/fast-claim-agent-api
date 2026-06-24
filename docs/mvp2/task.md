@@ -19,8 +19,9 @@
 | T9 | ChatController REST API | `controller/ChatController.java` | P0 | T8 |
 | T10 | CacheService + CacheConfiguration | `service/CacheService.java` · `config/CacheConfiguration.java` | P1 | — |
 | T11 | 更新 application.yml | `resources/application.yml` | P1 | — |
+| T12 | 流式回答（SSE） | `controller/ChatController.java` · `service/ChatService.java` · `agent/ChatbotAgent.java` | P1 | T5, T8, T9 |
 
-**依赖关系**：T1 → T2 → (T3 → T4, T5) → (T6, T7) → T8 → T9，T10 和 T11 与 T1-T7 可并行。
+**依赖关系**：T1 → T2 → (T3 → T4, T5) → (T6, T7) → T8 → T9 → T12，T10 和 T11 与 T1-T7 可并行。
 
 > 注：`embabel-agent-rag-lucene` 和 `embabel-agent-rag-tika` 已在 `pom.xml` 中引入（均为 0.3.5 版本），本阶段无需新增 Maven 依赖。
 
@@ -1132,6 +1133,144 @@ chat:
 
 ---
 
+## T12 流式回答（SSE）
+
+### T12.1 ChatbotAgent 流式方法
+
+**路径**：`src/main/java/com/fastclaim/agent/ChatbotAgent.java`（追加方法）
+
+```java
+/**
+ * 流式生成 — 通过 SseEmitter 逐字推送 LLM 回答。
+ * 与 answerQuestion 共享 prompt 构造逻辑，仅生成方式不同。
+ */
+@Action
+@AchievesGoal(description = "流式生成保险客服回答")
+public ChatOutput answerQuestionStream(UserInput input, OperationContext context) {
+    String prompt = buildPrompt(input);
+    SseEmitter emitter = context.blackboard().get("sseEmitter", SseEmitter.class);
+
+    try {
+        // 使用 Spring AI StreamingChatClient，绕过 Embabel 的阻塞式 generateText
+        StreamingChatClient streamClient = context.ai()
+                .withLlm(llmService.forChat())
+                .withReference(insuranceRag)
+                .streamingChatClient();
+
+        StringBuilder fullAnswer = new StringBuilder();
+        streamClient.stream(new Prompt(prompt))
+                .doOnNext(chatResponse -> {
+                    String token = chatResponse.getResult().getOutput().getContent();
+                    if (token != null) {
+                        emitter.send(SseEmitter.event().data(token));
+                        fullAnswer.append(token);
+                    }
+                })
+                .doOnComplete(() -> emitter.send(SseEmitter.event().data("[DONE]")).complete())
+                .blockLast();
+
+        return new ChatOutput(fullAnswer.toString());
+    } catch (Exception e) {
+        emitter.completeWithError(e);
+        throw new RuntimeException("流式生成失败", e);
+    }
+}
+```
+
+**备选方案**：如果 Embabel/Spring AI 的 `StreamingChatClient` 在此版本不可用，则使用 `Flux<String>` + `WebClient` 直接调用 DeepSeek API 的 `stream: true` 模式，手动解析 SSE 事件。
+
+### T12.2 ChatService 流式方法
+
+**路径**：`src/main/java/com/fastclaim/service/ChatService.java`（追加方法）
+
+```java
+/**
+ * 流式处理用户消息，通过 SseEmitter 逐字推送回复。
+ * 会话管理、护栏校验逻辑与 processChat 完全一致。
+ */
+public SseEmitter streamChat(String message, String sessionId) {
+    String userId = getCurrentUserId();
+
+    // 1. 获取或创建会话（同 processChat）
+    ChatSession session;
+    if (sessionId == null || sessionId.isEmpty()) {
+        session = createSession(userId);
+        sessionId = session.getSessionId();
+    } else {
+        session = sessions.get(sessionId);
+        if (session == null) throw new SessionNotFoundException("会话不存在: " + sessionId);
+        if (session.isExpired(sessionTtlMinutes)) throw new SessionExpiredException("会话已过期");
+    }
+
+    // 2. 输入护栏
+    ValidationResult inputResult = inputGuardRail.validate(message, null);
+    if (!inputResult.isValid()) {
+        throw new InputRejectedException(inputResult.getErrors().get(0).getMessage());
+    }
+
+    // 3. 构造输入
+    UserInput userInput = new UserInput(message, session.getConversationContext(maxHistoryRounds));
+
+    // 4. 创建 SseEmitter，超时与会话 TTL 一致
+    SseEmitter emitter = new SseEmitter(TimeUnit.MINUTES.toMillis(sessionTtlMinutes));
+
+    // 5. 异步调用 Agent（在独立线程中生成，避免阻塞 SSE 线程）
+    CompletableFuture.runAsync(() -> {
+        try {
+            ChatOutput output = AgentInvocation.on(agentPlatform)
+                    .returning(ChatOutput.class)
+                    .invoke(userInput);
+
+            // 回复护栏
+            ValidationResult outputResult = outputGuardRail.validate(
+                    new AssistantMessage("assistant", output.answer()), null);
+            if (!outputResult.getErrors().isEmpty()) {
+                log.warn("回复护栏告警 — sessionId: {}", sessionId);
+            }
+
+            // 保存对话
+            session.addMessagePair(message, output.answer(), maxHistoryRounds);
+            session.touch();
+            emitter.complete();
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+    });
+
+    return emitter;
+}
+```
+
+### T12.3 ChatController 流式端点
+
+**路径**：`src/main/java/com/fastclaim/controller/ChatController.java`（追加方法）
+
+```java
+/**
+ * 流式对话 — SSE 协议，逐字推送 LLM 回答。
+ */
+@PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+@PreAuthorize("hasAuthority('chat:use')")
+public SseEmitter streamMessage(
+        @Valid @RequestBody ChatRequest request,
+        @RequestParam(required = false) String sessionId) {
+
+    log.debug("收到流式消息 — sessionId: {}, message: {}", sessionId,
+            request.message().substring(0, Math.min(100, request.message().length())));
+
+    return chatService.streamChat(request.message(), sessionId);
+}
+```
+
+**实现要点**：
+- 控制器直接返回 `SseEmitter`，Spring MVC 自动设置 `Content-Type: text/event-stream`
+- SSE 长连接超时与 `chat.session.ttl-minutes` 一致
+- Agent 调用放在 `CompletableFuture.runAsync()` 中，避免阻塞 SSE 线程
+- 前端通过 `new EventSource('/api/chat/stream')` 消费，收到 `[DONE]` 事件表示结束
+- 流式路径不经过输出缓存（每次生成内容唯一，缓存命中率极低）
+
+---
+
 ## 实施顺序
 
 ```
@@ -1140,12 +1279,12 @@ T1 (DTO) ──▶ T2 (RagConfiguration)
         ┌───────┴───────┐
         ▼               ▼
     T3 (Ingestion)   T5 (ChatbotAgent)
-        │
-        ▼
-    T4 (Runner)
+        │               │
+        ▼               │
+    T4 (Runner)          │
 
-T6 (InputGuard) ──┐
-                   ├──▶ T8 (ChatService) ──▶ T9 (ChatController)
+T6 (InputGuard) ──┐     │
+                   ├──▶ T8 (ChatService) ──▶ T9 (ChatController) ──▶ T12 (Streaming)
 T7 (OutputGuard) ──┘
 
 T10 (Cache) ──▶ 可与其他任务并行
@@ -1160,8 +1299,9 @@ T11 (yml) ──▶ T1-T7 完成后统一切换配置前缀
 5. **T6/T7 平行**：护栏无相互依赖，与 T2-T5 可并行
 6. **T8 汇聚**：依赖 DTO、Agent、护栏全部就位
 7. **T9 接 T8**：Controller 调用 Service
-8. **T10 独立**：Cache 可随时做
-9. **T11 最后统一**：配置前缀迁移影响面小，在所有代码引用确定后执行
+8. **T12 接 T9**：流式端点依赖 Controller、Service、Agent 全部就位
+9. **T10 独立**：Cache 可随时做
+10. **T11 最后统一**：配置前缀迁移影响面小，在所有代码引用确定后执行
 
 ---
 
@@ -1182,5 +1322,7 @@ T11 (yml) ──▶ T1-T7 完成后统一切换配置前缀
 | 过期会话 | 等待 31 分钟后用旧 sessionId，返回 410 |
 | 清除会话 | `curl -u user:password -X DELETE http://localhost:8080/api/chat/sessions/{id}` 返回 204 |
 | 定时清理 | 日志中确认 "定时清理过期会话" 定时触发 |
-| Swagger UI | 访问 `http://localhost:8080/swagger-ui/index.html` 可见 `/api/chat` 端点 |
+| Swagger UI | 访问 `http://localhost:8080/swagger-ui/index.html` 可见 `/api/chat` 和 `/api/chat/stream` 端点 |
+| 流式推送 | `curl -u user:password -N -X POST -H 'Content-Type: application/json' -d '{"message":"车险怎么理赔？"}' http://localhost:8080/api/chat/stream` 可见逐字推送的 SSE 事件 |
+| 流式错误处理 | 无效 sessionId 的流式请求，EventSource 可通过 onerror 捕获错误 |
 | 日志完整 | 所有关键操作有中文日志：会话创建/过期、护栏拒绝、文档摄入、Agent 调用 |

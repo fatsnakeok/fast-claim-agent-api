@@ -4,23 +4,25 @@
 
 ## 约束（必须遵守）
 
-1. 生成代码时须在关键逻辑处添加必要的中文注释，注释说明 WHY 而非 WHAT
-2. 生成代码时须使用 LoggerFactory 添加必要日志：
+1. **代码生成强制遵循《阿里巴巴Java开发手册 泰山版》全部强制规则**，详见 `.claude/rules/alibaba-lint.md`
+2. 生成代码时须在关键逻辑处添加必要的中文注释，注释说明 WHY 而非 WHAT
+3. 生成代码时须使用 LoggerFactory 添加必要日志：
    - Service/Component/Config 类：使用 `private static final Logger log = LoggerFactory.getLogger(Xxx.class)` 声明日志实例
    - 关键操作（初始化、状态变更、错误恢复）使用 `log.info()` 或 `log.warn()`
    - 调试信息（单号生成、模型路由选择、参数值）使用 `log.debug()`
    - 日志内容使用中文，占位符使用 `{}`
    - Entity 类仅在构造函数（单号生成）和 Sentinel 工厂方法（`lookupFailed()`）处添加日志
    - Repository 接口不需要日志
-3. 修改 CLAUDE.md 时须用中文沟通确认
-4. 以上三条为强制性约束，不可跳过或忽略
+4. 修改 CLAUDE.md 时须用中文沟通确认
+5. 以上四条为强制性约束，不可跳过或忽略
 
 ## 构建与运行
 
 ```bash
 # 前置条件
-export DEEPSEEK_API_KEY=sk-xxx
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+# 编辑 .env 填入真实 DeepSeek API Key，启动前执行：
+source .env
 
 # 编译
 ./mvnw compile

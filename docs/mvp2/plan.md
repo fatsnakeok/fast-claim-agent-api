@@ -392,7 +392,108 @@ chat:
 
 ---
 
-## 10. 实施清单
+## 10. 流式回答（SSE）
+
+### 10.1 设计目标
+
+新增 `POST /api/chat/stream` 端点，以 Server-Sent Events（SSE）协议逐字推送 LLM 生成的回答，提升用户体验——用户无需等待完整回复即可看到生成过程。
+
+### 10.2 协议选择
+
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| SSE（`SseEmitter`） | Spring MVC 原生支持，单工推送即可，无需 WebFlux | 每个连接占用一个线程 |
+| WebSocket | 全双工 | 过度设计，客服场景只需服务端推送 |
+| `StreamingResponseBody` | 简单 | 需手动管理 SSE 格式 |
+
+**选择**：`SseEmitter` — 标准 SSE 协议，前端用 `EventSource` 即可消费，零依赖。
+
+### 10.3 架构
+
+```
+POST /api/chat/stream
+  │
+  ├─ ChatController.streamChat()
+  │      ├─ 参数校验 (@Valid)
+  │      ├─ 创建 SseEmitter (超时 = chat.session.ttl-minutes)
+  │      └─ 异步调用 ChatService.streamChat()
+  │
+  ▼
+ChatService.streamChat(message, sessionId, emitter)
+  ├─ 1. 获取/创建会话（同 processChat）
+  ├─ 2. 输入护栏校验（同 processChat）
+  ├─ 3. 构造 UserInput（含对话历史）
+  ├─ 4. 调用 AgentInvocation.invokeAsync(chatbotAgent, userInput)
+  │      └─ ChatbotAgent.answerQuestionStream() 
+  │           └─ context.ai()...generateStream(buildPrompt(input))
+  │                └─ 每个 token → emitter.send(token)
+  ├─ 5. 回复护栏校验（仅告警）
+  ├─ 6. 保存对话记录
+  └─ emitter.complete()
+```
+
+### 10.4 ChatbotAgent 流式方法
+
+```java
+@Action
+@AchievesGoal(description = "流式生成保险客服回答")
+public ChatOutput answerQuestionStream(UserInput input, OperationContext context) {
+    // 构造完整 prompt
+    String prompt = buildPrompt(input);
+    
+    // 从 context 获取 StreamingChatClient（由 DeepSeek autoconfigure 提供）
+    StreamingChatClient streamClient = context.ai()
+            .withLlm(llmService.forChat())
+            .streamingClient();
+    
+    // SSE 推送通过 SseEmitter（由 Service 层注入到 Blackboard）
+    SseEmitter emitter = context.getBlackboard().get("sseEmitter", SseEmitter.class);
+    
+    StringBuilder fullAnswer = new StringBuilder();
+    streamClient.stream(new Prompt(prompt))
+            .doOnNext(token -> {
+                emitter.send(token);
+                fullAnswer.append(token);
+            })
+            .doOnComplete(() -> emitter.complete())
+            .blockLast();
+    
+    return new ChatOutput(fullAnswer.toString());
+}
+```
+
+> **备选方案**：如果 Embabel 框架暂不支持 `generateStream()`，可直接注入 Spring AI 的 `StreamingChatClient` 绕过 Embabel 的阻塞式 `generateText()`，在 Agent @Action 中手动管理流式调用。
+
+### 10.5 SSE 事件格式
+
+```
+data: 您
+data: 好
+data: ，
+data: 根
+data: 据
+...
+data: [DONE]
+```
+
+### 10.6 端点设计
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/api/chat/stream` | `hasAuthority('chat:use')` | 流式发送消息 |
+
+**请求**（同 `/api/chat`）：
+```json
+{ "message": "什么是交强险和商业险的区别？" }
+```
+
+**响应**：`Content-Type: text/event-stream`，SSE 事件流包含逐字 token。
+
+**错误处理**：会话校验错误通过 `emitter.completeWithError()` 发送，前端监听 `EventSource.onerror`。
+
+---
+
+## 11. 实施清单
 
 | 序号 | 任务 | 产出 | 依赖 |
 |------|------|------|------|
@@ -407,12 +508,13 @@ chat:
 | 9 | 实现 ChatController（REST API） | `controller/ChatController.java` | T8 |
 | 10 | 实现 CacheService + CacheConfiguration | `service/CacheService.java` · `config/CacheConfiguration.java` | — |
 | 11 | 更新 application.yml（insurance.rag + chat.* 段） | `resources/application.yml` | — |
+| 12 | 实现流式回答（SSE） | `controller/ChatController.java` · `service/ChatService.java` · `agent/ChatbotAgent.java` | T5, T8, T9 |
 
-**建议实施顺序**：T1 → (T2, T3, T4 串行) → T5 → (T6, T7 并行) → T8 → T9 → (T10, T11 并行)
+**建议实施顺序**：T1 → (T2, T3, T4 串行) → T5 → (T6, T7 并行) → T8 → T9 → T12 → (T10, T11 并行)
 
 ---
 
-## 11. 关键设计决策
+## 12. 关键设计决策
 
 | 决策 | 选择 | 原因 |
 |------|------|------|
@@ -425,3 +527,4 @@ chat:
 | 输出护栏不阻断 | 仅标记警告 | LLM 回复被阻断会导致用户无响应，用户体验不可接受 |
 | 缓存 TTL | 5 分钟 | 覆盖短时间内的重复查询，过期清理控制内存 |
 | 配置前缀 | `insurance.rag` 替代 `claim.rag` | 统一命名空间，与知识库文档的业务语义一致 |
+| 流式协议 | SSE（`SseEmitter`） | Spring MVC 原生支持，前端 `EventSource` 即可消费，无需 WebSocket/WebFlux |
