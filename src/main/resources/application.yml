@@ -54,6 +54,11 @@ chat:
     ttl-minutes: 5
     cleanup-interval-ms: 300000
 
+deepseek:
+  stream:
+    base-url: https://api.deepseek.com
+    model: deepseek-chat
+
 server:
   port: 8080
 

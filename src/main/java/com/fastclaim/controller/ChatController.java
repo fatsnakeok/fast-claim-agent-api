@@ -6,9 +6,11 @@ import com.fastclaim.service.ChatService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/chat")
@@ -37,6 +39,23 @@ public class ChatController {
 
         ChatResponse response = chatService.processChat(request.message(), sessionId);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 流式消息 — SSE 协议逐 token 推送 LLM 回答。
+     * 首次请求不传 sessionId，服务端创建新会话并通过 metadata 事件告知客户端。
+     */
+    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("hasAuthority('chat:use')")
+    public SseEmitter streamMessage(
+            @Valid @RequestBody ChatRequest request,
+            @RequestParam(required = false) String sessionId) {
+
+        log.debug("收到流式消息 — sessionId: {}, message: {}",
+                sessionId,
+                request.message().substring(0, Math.min(100, request.message().length())));
+
+        return chatService.streamChat(request.message(), sessionId);
     }
 
     /**

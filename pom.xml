@@ -53,6 +53,8 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <!-- ARM64 (Apple Silicon) 原生库，Intel Mac 改为 osx-x86_64 -->
+            <classifier>osx-aarch_64</classifier>
         </dependency>
 
         <!-- Embabel 可观测性 → OpenTelemetry trace -->
