@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ChatbotAgent 时序图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; display: flex; justify-content: center; padding: 40px; }
+  svg { max-width: 100%; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 820" width="1100" height="820" font-family="'SF Mono','Menlo',monospace" font-size="13">
+
+  <!-- ===== 标题 ===== -->
+  <text x="550" y="32" text-anchor="middle" fill="#e6edf3" font-size="20" font-weight="bold">ChatbotAgent 时序图</text>
+
+  <!-- ===== 参与者头部 ===== -->
+  <!-- 用户 -->
+  <rect x="30" y="55" width="80" height="30" rx="4" fill="#1f6feb"/>
+  <text x="70" y="75" text-anchor="middle" fill="#fff" font-size="12">用户</text>
+  <line x1="70" y1="85" x2="70" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- ChatController -->
+  <rect x="200" y="55" width="110" height="30" rx="4" fill="#238636"/>
+  <text x="255" y="75" text-anchor="middle" fill="#fff" font-size="12">ChatController</text>
+  <line x1="255" y1="85" x2="255" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- ChatService -->
+  <rect x="390" y="55" width="100" height="30" rx="4" fill="#8957e5"/>
+  <text x="440" y="75" text-anchor="middle" fill="#fff" font-size="12">ChatService</text>
+  <line x1="440" y1="85" x2="440" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- InputGuardRail -->
+  <rect x="560" y="55" width="120" height="30" rx="4" fill="#da3633"/>
+  <text x="620" y="75" text-anchor="middle" fill="#fff" font-size="12">InputGuardRail</text>
+  <line x1="620" y1="85" x2="620" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- ChatbotAgent -->
+  <rect x="740" y="55" width="110" height="30" rx="4" fill="#bf8700"/>
+  <text x="795" y="75" text-anchor="middle" fill="#fff" font-size="12">ChatbotAgent</text>
+  <line x1="795" y1="85" x2="795" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- InsuranceKnowledgeBase (RAG) -->
+  <rect x="920" y="55" width="150" height="30" rx="4" fill="#1b7c83"/>
+  <text x="995" y="75" text-anchor="middle" fill="#fff" font-size="12">KnowledgeBase(RAG)</text>
+  <line x1="995" y1="85" x2="995" y2="770" stroke="#30363d" stroke-dasharray="6,4"/>
+
+  <!-- ===== 交互箭头 ===== -->
+  <!-- 1. POST /api/chat -->
+  <polygon points="248,105 258,110 248,115" fill="#58a6ff"/>
+  <line x1="70" y1="110" x2="253" y2="110" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="162" y="104" text-anchor="middle" fill="#7ee787" font-size="11">1. POST /api/chat?sessionId=xxx</text>
+  <text x="162" y="122" text-anchor="middle" fill="#8b949e" font-size="10">message + sessionId(可选)</text>
+
+  <!-- 2. processChat() -->
+  <polygon points="433,150 443,155 433,160" fill="#58a6ff"/>
+  <line x1="255" y1="155" x2="438" y2="155" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="347" y="149" text-anchor="middle" fill="#7ee787" font-size="11">2. processChat(message, sessionId)</text>
+
+  <!-- 自调用：获取/创建会话 -->
+  <rect x="430" y="170" width="140" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="500" y="185" text-anchor="middle" fill="#8b949e" font-size="10">获取/创建会话</text>
+
+  <!-- 3. 护栏校验 -->
+  <polygon points="613,215 623,220 613,225" fill="#58a6ff"/>
+  <line x1="440" y1="220" x2="618" y2="220" stroke="#fa8d3b" stroke-width="1.5"/>
+  <text x="529" y="214" text-anchor="middle" fill="#fa8d3b" font-size="11">3. validate(message) [输入护栏]</text>
+
+  <!-- 护栏返回 -->
+  <polygon points="447,245 437,250 447,255" fill="#8b949e"/>
+  <line x1="620" y1="250" x2="443" y2="250" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="532" y="244" text-anchor="middle" fill="#8b949e" font-size="10">ValidationResult</text>
+
+  <!-- alt 框：护栏通过 -->
+  <rect x="80" y="270" width="960" height="30" rx="4" fill="#1a3a2a" opacity="0.5" stroke="#238636" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="100" y="290" fill="#7ee787" font-size="11">alt [护栏通过]</text>
+
+  <!-- 4. 构造 UserInput -->
+  <rect x="430" y="312" width="170" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="515" y="327" text-anchor="middle" fill="#8b949e" font-size="10">构造 UserInput + 对话历史</text>
+
+  <!-- 5. 调用 Agent -->
+  <polygon points="788,355 798,360 788,365" fill="#58a6ff"/>
+  <line x1="440" y1="360" x2="793" y2="360" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="617" y="354" text-anchor="middle" fill="#7ee787" font-size="11">5. AgentInvocation.on(platform).invoke(UserInput)</text>
+
+  <!-- 6. answerQuestion() -->
+  <rect x="780" y="380" width="200" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="880" y="395" text-anchor="middle" fill="#8b949e" font-size="10">@Action answerQuestion()</text>
+
+  <!-- 7. context.ai() 调用 -->
+  <polygon points="988,415 998,420 988,425" fill="#58a6ff"/>
+  <line x1="795" y1="420" x2="993" y2="420" stroke="#a371f7" stroke-width="1.5"/>
+  <text x="894" y="414" text-anchor="middle" fill="#a371f7" font-size="11">7. context.ai().withLlm().withReference(rag)</text>
+
+  <!-- 8. LLM 调用 search -->
+  <polygon points="803,455 793,460 803,465" fill="#8b949e"/>
+  <line x1="993" y1="460" x2="797" y2="460" stroke="#1b7c83" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="895" y="454" text-anchor="middle" fill="#1b7c83" font-size="11">8. LLM 自主调用 insurance_docs_textSearch</text>
+
+  <!-- 9. KnowledgeBase.search() -->
+  <polygon points="1002,485 992,490 1002,495" fill="#8b949e"/>
+  <text x="895" y="484" text-anchor="middle" fill="#8b949e" font-size="10">@LlmTool search(query)</text>
+
+  <!-- 10. Lucene BM25 检索 -->
+  <rect x="900" y="502" width="190" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="995" y="517" text-anchor="middle" fill="#8b949e" font-size="10">Lucene.textSearch() → BM25 匹配</text>
+
+  <!-- 11. 返回检索结果 -->
+  <polygon points="803,540 793,545 803,550" fill="#8b949e"/>
+  <line x1="993" y1="545" x2="797" y2="545" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="895" y="539" text-anchor="middle" fill="#8b949e" font-size="10">文档块结果</text>
+
+  <!-- 12. LLM 综合回答 -->
+  <rect x="780" y="562" width="220" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="890" y="577" text-anchor="middle" fill="#8b949e" font-size="10">LLM 综合检索结果 + prompt → 生成回答</text>
+
+  <!-- 13. 返回 ChatOutput -->
+  <polygon points="448,600 438,605 448,610" fill="#8b949e"/>
+  <line x1="793" y1="605" x2="443" y2="605" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="618" y="599" text-anchor="middle" fill="#8b949e" font-size="10">ChatOutput(answer)</text>
+
+  <!-- 14. 输出护栏 -->
+  <polygon points="613,630 623,635 613,640" fill="#58a6ff"/>
+  <line x1="440" y1="635" x2="618" y2="635" stroke="#fa8d3b" stroke-width="1.5"/>
+  <text x="529" y="629" text-anchor="middle" fill="#fa8d3b" font-size="11">14. validate(answer) [输出护栏 — 仅告警]</text>
+
+  <!-- 15. 保存对话 -->
+  <rect x="430" y="652" width="140" height="22" rx="4" fill="none" stroke="#8b949e" stroke-width="1"/>
+  <text x="500" y="667" text-anchor="middle" fill="#8b949e" font-size="10">保存对话记录 + touch()</text>
+
+  <!-- 16. 返回 ChatResponse -->
+  <polygon points="78,695 68,700 78,705" fill="#8b949e"/>
+  <line x1="255" y1="700" x2="73" y2="700" stroke="#8b949e" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="164" y="694" text-anchor="middle" fill="#7ee787" font-size="11">16. ChatResponse(sessionId, answer, isNewSession)</text>
+
+  <!-- alt 框：护栏拒绝 -->
+  <rect x="80" y="720" width="960" height="45" rx="4" fill="#3a1a1a" opacity="0.5" stroke="#da3633" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="100" y="740" fill="#f85149" font-size="11">alt [护栏拒绝]</text>
+  <text x="100" y="756" fill="#8b949e" font-size="11">返回 422 INPUT_REJECTED，不调用 LLM</text>
+
+  <!-- ===== 底部标注 ===== -->
+  <text x="550" y="795" text-anchor="middle" fill="#484f58" font-size="10">阶段二 · ChatbotAgent · Embabel UTILITY Planner · Agentic RAG</text>
+</svg>
+</body>
+</html>

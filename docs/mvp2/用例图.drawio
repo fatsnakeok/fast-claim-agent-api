@@ -1,0 +1,139 @@
+<mxfile host="Electron">
+  <diagram name="ChatbotAgent 用例图" id="usecase-chatbot">
+    <mxGraphModel dx="3693" dy="1210" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="sys" parent="1" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=#0d1117;strokeColor=#30363d;fontColor=#8b949e;fontSize=12;" value="保险 AI 客服系统 (fast-claim-agent-api)" vertex="1">
+          <mxGeometry height="1000" width="970" x="180" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ly2" parent="sys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fa8d3b;strokeColor=none;opacity=5;" value="" vertex="1">
+          <mxGeometry height="90.72" width="925" x="25" y="247.42" as="geometry" />
+        </mxCell>
+        <mxCell id="ly2t" parent="sys" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontColor=#fa8d3b;fontSize=10;opacity=40;" value="安全护栏" vertex="1">
+          <mxGeometry height="16.49484536082474" width="55" x="25" y="247.4226804123711" as="geometry" />
+        </mxCell>
+        <mxCell id="ly1" parent="sys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1f6feb;strokeColor=none;opacity=5;" value="" vertex="1">
+          <mxGeometry height="134.02" width="925" x="25" y="92.78" as="geometry" />
+        </mxCell>
+        <mxCell id="uc1" parent="sys" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#58a6ff;strokeWidth=2;fontColor=#e6edf3;fontSize=13;" value="发送消息咨询保险&#xa;POST /api/chat" vertex="1">
+          <mxGeometry height="61.85567010309278" width="165" x="440" y="128.86597938144328" as="geometry" />
+        </mxCell>
+        <mxCell id="ly3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#a371f7;strokeColor=none;opacity=5;" value="" vertex="1">
+          <mxGeometry height="360" width="920" x="205" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="ly3t" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontColor=#a371f7;fontSize=10;opacity=40;" value="Agentic RAG 检索" vertex="1">
+          <mxGeometry height="16" width="110" x="218" y="382" as="geometry" />
+        </mxCell>
+        <mxCell id="ly4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bf8700;strokeColor=none;opacity=5;" value="" vertex="1">
+          <mxGeometry height="98" width="920" x="205" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="ly4t" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontColor=#bf8700;fontSize=10;opacity=40;" value="会话管理" vertex="1">
+          <mxGeometry height="16" width="55" x="218" y="762" as="geometry" />
+        </mxCell>
+        <mxCell id="ly5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1b7c83;strokeColor=none;opacity=5;" value="" vertex="1">
+          <mxGeometry height="95" width="920" x="205" y="895" as="geometry" />
+        </mxCell>
+        <mxCell id="ly5t" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontColor=#1b7c83;fontSize=10;opacity=40;" value="后台任务" vertex="1">
+          <mxGeometry height="16" width="55" x="218" y="897" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#0d1117;strokeColor=#58a6ff;fontColor=#58a6ff;fontSize=11;" value="用户&#xa;USER / UNDERWRITER&#xa;/ CLAIMS / ADMIN" vertex="1">
+          <mxGeometry height="95" width="40" x="40" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#0d1117;strokeColor=#bf8700;fontColor=#bf8700;fontSize=11;" value="管理员&#xa;ADMIN" vertex="1">
+          <mxGeometry height="80" width="40" x="40" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#0d1117;strokeColor=#1b7c83;fontColor=#1b7c83;fontSize=11;" value="系统定时器&#xa;@Scheduled" vertex="1">
+          <mxGeometry height="80" width="40" x="40" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="uc2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#7ee787;strokeWidth=2;fontColor=#e6edf3;fontSize=13;" value="多轮对话&#xa;sessionId 保持上下文" vertex="1">
+          <mxGeometry height="60" width="155" x="970" y="158" as="geometry" />
+        </mxCell>
+        <mxCell id="uc4" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#fa8d3b;strokeWidth=2;fontColor=#fa8d3b;fontSize=12;" value="输入护栏校验&#xa;注入·SQL·Base64·话题" vertex="1">
+          <mxGeometry height="60" width="155" x="320" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="uc5" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#fa8d3b;strokeWidth=2;fontColor=#fa8d3b;fontSize=12;" value="回复护栏校验&#xa;敏感信息·幻觉·长度异常" vertex="1">
+          <mxGeometry height="60" width="160" x="760" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="uc6" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#a371f7;strokeWidth=2;fontColor=#a371f7;fontSize=13;" value="Agentic RAG 检索&#xa;LLM 自主发起·多轮迭代" vertex="1">
+          <mxGeometry height="60" width="175" x="530" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="uc7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#1b7c83;strokeWidth=2;fontColor=#e6edf3;fontSize=13;" value="搜索知识库&#xa;Lucene BM25 全文检索" vertex="1">
+          <mxGeometry height="60" width="160" x="320" y="558" as="geometry" />
+        </mxCell>
+        <mxCell id="uc8" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#8957e5;strokeWidth=2;fontColor=#e6edf3;fontSize=13;" value="LLM 生成回答&#xa;DeepSeek·综合检索结果" vertex="1">
+          <mxGeometry height="60" width="160" x="750" y="558" as="geometry" />
+        </mxCell>
+        <mxCell id="uc9" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1117;strokeColor=#484f58;strokeWidth=1.5;dashed=1;fontColor=#8b949e;fontSize=12;" value="知识库文档&#xa;3 份 Markdown" vertex="1">
+          <mxGeometry height="55" width="120" x="340" y="688" as="geometry" />
+        </mxCell>
+        <mxCell id="uc3" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#bf8700;strokeWidth=2;fontColor=#e6edf3;fontSize=13;" value="清除会话&#xa;DELETE /api/chat/sessions/{id}" vertex="1">
+          <mxGeometry height="60" width="165" x="650" y="762" as="geometry" />
+        </mxCell>
+        <mxCell id="uc10" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#1b7c83;strokeWidth=2;fontColor=#e6edf3;fontSize=12;" value="定时清理过期会话&#xa;@Scheduled 每 5 分钟" vertex="1">
+          <mxGeometry height="60" width="165" x="400" y="912" as="geometry" />
+        </mxCell>
+        <mxCell id="uc11" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#1b7c83;strokeWidth=2;fontColor=#e6edf3;fontSize=12;" value="启动时文档摄入&#xa;CommandLineRunner" vertex="1">
+          <mxGeometry height="60" width="165" x="650" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="uc12" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#0d1a2b;strokeColor=#238636;strokeWidth=2;fontColor=#e6edf3;fontSize=12;" value="缓存管理&#xa;Spring Cache·TTL" vertex="1">
+          <mxGeometry height="55" width="140" x="940" y="915" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="ly1t" style="endArrow=none;html=1;strokeColor=#58a6ff;strokeWidth=1.5;" target="uc1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="a1" style="endArrow=none;html=1;strokeColor=#58a6ff;strokeWidth=1.5;" target="uc3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="a2" style="endArrow=none;html=1;strokeColor=#bf8700;strokeWidth=1.5;dashed=1;" target="uc1" value="次要参与者">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="a2" style="endArrow=none;html=1;strokeColor=#bf8700;strokeWidth=1.5;" target="uc3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="a3" style="endArrow=none;html=1;strokeColor=#1b7c83;strokeWidth=1.5;" target="uc10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="a3" style="endArrow=none;html=1;strokeColor=#1b7c83;strokeWidth=1.5;" target="uc11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" edge="1" parent="1" source="uc1" style="endArrow=open;html=1;dashed=1;strokeColor=#7ee787;strokeWidth=1.5;fontColor=#7ee787;fontSize=10;endSize=12;" target="uc2" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" edge="1" parent="1" source="uc1" style="endArrow=open;html=1;dashed=1;strokeColor=#fa8d3b;strokeWidth=1.5;fontColor=#fa8d3b;fontSize=10;endSize=12;" target="uc4" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" edge="1" parent="1" source="uc1" style="endArrow=open;html=1;dashed=1;strokeColor=#fa8d3b;strokeWidth=1.5;fontColor=#fa8d3b;fontSize=10;endSize=12;" target="uc5" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r4" edge="1" parent="1" source="uc1" style="endArrow=open;html=1;dashed=1;strokeColor=#a371f7;strokeWidth=1.5;fontColor=#a371f7;fontSize=10;endSize=12;" target="uc6" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" edge="1" parent="1" source="uc6" style="endArrow=open;html=1;dashed=1;strokeColor=#1b7c83;strokeWidth=1.5;fontColor=#1b7c83;fontSize=10;endSize=12;" target="uc7" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r6" edge="1" parent="1" source="uc6" style="endArrow=open;html=1;dashed=1;strokeColor=#8957e5;strokeWidth=1.5;fontColor=#8957e5;fontSize=10;endSize=12;" target="uc8" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r7" edge="1" parent="1" source="uc7" style="endArrow=open;html=1;dashed=1;strokeColor=#484f58;strokeWidth=1;fontColor=#484f58;fontSize=9;endSize=12;" target="uc9" value="读取">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r8" edge="1" parent="1" source="uc1" style="endArrow=open;html=1;dashed=1;strokeColor=#238636;strokeWidth=1.5;fontColor=#238636;fontSize=10;endSize=12;" target="uc12" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#0d1117;strokeColor=#30363d;fontColor=#8b949e;fontSize=10;align=left;spacingLeft=10;" value="图例&#xa;──── 主要参与者&#xa;- - - - 次要参与者&#xa;- - - -«include»&#xa;- - - -«extend»&#xa;- - - -数据依赖" vertex="1">
+          <mxGeometry height="120" width="130" x="30" y="915" as="geometry" />
+        </mxCell>
+        <mxCell id="j3JCXmRgbua-j3zUmVGZ-1" edge="1" parent="1" source="a1" style="endArrow=none;html=1;strokeColor=#58a6ff;strokeWidth=1.5;" target="ly1t" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="80" y="161" as="sourcePoint" />
+            <mxPoint x="602" y="124" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ly1t" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontColor=#58a6ff;fontSize=10;opacity=40;" value="客服对话" vertex="1">
+          <mxGeometry height="16" width="55" x="205" y="142" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
