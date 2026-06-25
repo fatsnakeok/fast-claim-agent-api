@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVP3 核保 — 活动图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#1a1a2e; --card-bg:#16213e; --text:#e0e0e0; --border:#3a3a5c; --green:#4caf50; --orange:#ff9800; --red:#f44336; --blue:#42a5f5; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:24px; }
+  h1 { text-align:center; margin-bottom:8px; font-size:26px; color:#fff; }
+  .subtitle { text-align:center; color:#888; margin-bottom:32px; font-size:14px; }
+  .diagram-section { background:var(--card-bg); border-radius:12px; padding:24px; margin-bottom:32px; border:1px solid var(--border); }
+  .section-title { font-size:18px; font-weight:600; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .badge { font-size:11px; padding:3px 10px; border-radius:12px; font-weight:500; }
+  .badge-green { background:rgba(76,175,80,0.2); color:var(--green); }
+  .badge-blue { background:rgba(66,165,245,0.2); color:var(--blue); }
+  .badge-orange { background:rgba(255,152,0,0.2); color:var(--orange); }
+  .badge-red { background:rgba(244,67,54,0.2); color:var(--red); }
+  .mermaid { display:flex; justify-content:center; }
+  .toc { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-bottom:32px; }
+  .toc a { color:var(--blue); text-decoration:none; padding:6px 14px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+  .toc a:hover { background:var(--border); }
+</style>
+</head>
+<body>
+
+<h1>MVP3 智能核保 — 活动图</h1>
+<p class="subtitle">展示核保业务的完整流程、决策分支与泳道分工</p>
+
+<div class="toc">
+  <a href="#main-flow">核保主流程</a>
+  <a href="#vehicle-lookup">车辆查找子流程</a>
+  <a href="#payment">支付签单 + 人工审批</a>
+  <a href="#error-flow">错误路径汇总</a>
+</div>
+
+<!-- ===== 核保主流程 ===== -->
+<div class="diagram-section" id="main-flow">
+  <div class="section-title">
+    核保主流程（泳道图）
+    <span class="badge badge-green">US-U1/U2/U3</span>
+  </div>
+  <pre class="mermaid">
+graph TD
+    Start([用户提交核保申请])
+    Auth{权限校验}
+    Fail401([401/403])
+
+    Start --> Auth
+    Auth -- "无权限" --> Fail401
+    Auth -- "通过" --> AS
+
+    AS["AgentService.processUnderwriting
+    创建 AgentProcess
+    绑定 userId · 120s 超时"]
+
+    AS --> A1
+
+    subgraph Agent [UnderwritingAgent 流水线 - PlannerType.UTILITY]
+      direction TB
+
+      A1["Action1: extractVehicleInfo
+      LLM 提取车辆信息"] --> PreCheck{findCustomer 前置检查}
+
+      PreCheck -- "不存在" --> BindErr1["跳过 LLM
+      bind underwriting_error"]
+      PreCheck -- "存在" --> LLM
+
+      LLM["调用 DeepSeek fast 模型
+      提取 brand / model / licensePlate"] --> ParseJSON{JSON 解析成功?}
+
+      ParseJSON -- "成功" --> A2
+      ParseJSON -- "失败" --> BindErr2["bind underwriting_error
+      无法识别车辆信息"]
+
+      BindErr1 --> A2
+      BindErr2 --> A2
+
+      A2["Action2: lookupCustomer
+      DataService.findCustomer
+      -> Customer 或 sentinel"] --> A3
+
+      A3["Action3: lookupVehicle
+      车牌-品牌型号-唯一车辆
+      三级优先级 -> Vehicle 或 sentinel"] --> A4
+
+      A4["Action4: assessRisk
+      sentinel + error 统一检查"] --> Sentinel{sentinel / error 判定}
+    end
+
+    Sentinel -- "Customer.lookupFailed" --> Err1
+    Sentinel -- "Vehicle.lookupFailed" --> Err2
+    Sentinel -- "underwriting_error != null" --> Err3
+    Sentinel -- "正常" --> Calc
+
+    Err1["CustomerNotFound @State
+    UnderwritingResult.error"] --> R422([422 ERROR])
+    Err2["VehicleLookupError @State
+    UnderwritingResult.error"] --> R422
+    Err3["ExtractionFailed @State
+    UnderwritingResult.error"] --> R422
+
+    Calc["RiskCalculationService
+    年龄+驾龄+事故x15+车龄+车价
+    6因子评分 钳制 0-100"] --> Premium
+
+    Premium["PremiumCalculationService
+    保费=车价x2%x风险系数x险种系数
+    BigDecimal 精度保留2位"] --> Route{风险评分阈值判定}
+
+    Route -- "<=60" --> Low["LowRiskQuote.execute
+    创建 Quote APPROVED"]
+    Route -- "61-79" --> Mid["MediumRiskReview.execute
+    创建 Quote REFERRED"]
+    Route -- ">=80" --> High["HighRiskDecline.execute
+    创建 Quote DECLINED"]
+
+    Low --> R200a([200 APPROVED])
+    Mid --> R200b([200 REFERRED])
+    High --> R200c([200 DECLINED])
+  </pre>
+</div>
+
+<!-- ===== 车辆查找子流程 ===== -->
+<div class="diagram-section" id="vehicle-lookup">
+  <div class="section-title">
+    DataService.findVehicle — 三级查找子流程
+    <span class="badge badge-blue">核心匹配逻辑</span>
+  </div>
+  <pre class="mermaid">
+flowchart TD
+    Start([findVehicle<br/>VehicleInfo, Customer])
+    HasPlate{info.licensePlate<br/>≠ null?}
+
+    Start --> HasPlate
+    HasPlate -- 是 --> PlateQuery[vehicleRepository<br/>.findByLicensePlate]
+    PlateQuery --> PlateFound{找到?}
+    PlateFound -- 是 --> CheckOwner{归属当前<br/>Customer?}
+    CheckOwner -- 是 --> ReturnPlate([返回 Vehicle])
+    CheckOwner -- 否 --> Warn1[log.warn<br/>车牌存在但不属于该客户]
+
+    HasPlate -- 否 --> GetList
+    PlateFound -- 否 --> GetList
+    Warn1 --> GetList
+    GetList --> HasBrandModel
+
+    GetList[获取客户名下<br/>所有车辆列表]
+    HasBrandModel{info.brand + model<br/>均非空?}
+
+    HasBrandModel -- 是 --> Match[遍历车辆<br/>brand + model<br/>equalsIgnoreCase 匹配]
+    Match --> BrandFound{匹配成功?}
+    BrandFound -- 是 --> ReturnMatch([返回 Vehicle])
+
+    HasBrandModel -- 否 --> CheckOnly
+    BrandFound -- 否 --> CheckOnly
+
+    CheckOnly{客户名下<br/>只有一辆车?}
+    CheckOnly -- 是 --> ReturnOnly([返回唯一车辆])
+    CheckOnly -- 否 --> ReturnSentinel([返回 Vehicle.lookupFailed<br/>sentinel 占位])
+  </pre>
+</div>
+
+<!-- ===== 支付签单 + 人工审批 ===== -->
+<div class="diagram-section" id="payment">
+  <div class="section-title">
+    支付签单 + 人工审批
+    <span class="badge badge-orange">US-U5 · approveQuote</span>
+  </div>
+  <pre class="mermaid">
+flowchart TD
+    subgraph Pay [支付签单流程]
+      P1([POST /api/insurance/pay<br/>{quoteId}]) --> P_Auth{权限校验}
+      P_Auth -- 无权限 --> P_403([403])
+      P_Auth -- 通过 --> P_Find[quoteRepository.findById]
+      P_Find --> P_Exist{报价单存在?}
+      P_Exist -- 否 --> P_400a([400 报价单不存在])
+      P_Exist -- 是 --> P_Status{status == APPROVED?}
+      P_Status -- 否 --> P_400b([400 仅已批准的报价单可支付])
+      P_Status -- 是 --> P_Expire{未过期?}
+      P_Expire -- 否 --> P_400c([400 报价单已过期])
+      P_Expire -- 是 --> P_Pay[模拟支付处理<br/>log.info]
+      P_Pay --> P_Create[创建 Policy<br/>policyNumber 自动生成<br/>effectiveDate=now<br/>expirationDate=+lengthOfYear<br/>status=ACTIVE]
+      P_Create --> P_Save[policyRepository.save]
+      P_Save --> P_OK([200 PolicyResponse])
+    end
+
+    subgraph Approve [人工审批流程]
+      A1([POST /quotes/{id}/approve<br/>{overridePremiumAmount}]) --> A_Auth{权限校验<br/>underwriting:approve}
+      A_Auth -- 无权限 --> A_403([403])
+      A_Auth -- 通过 --> A_Find[quoteRepository.findById]
+      A_Find --> A_Exist{存在?}
+      A_Exist -- 否 --> A_400a([400 报价单不存在])
+      A_Exist -- 是 --> A_Status{status == REFERRED?}
+      A_Status -- 否 --> A_400b([400 仅REFERRED可审批])
+      A_Status -- 是 --> A_Expire{未过期?}
+      A_Expire -- 否 --> A_400c([400 报价单已过期])
+      A_Expire -- 是 --> A_Override{overridePremium<br/>≠ null?}
+      A_Override -- 是 --> A_Set[quote.premiumAmount = override]
+      A_Override -- 否 --> A_Approve
+      A_Set --> A_Approve[quote.status = APPROVED<br/>quoteRepository.save]
+      A_Approve --> A_OK([200 ApproveQuoteResponse])
+    end
+  </pre>
+</div>
+
+<!-- ===== 错误路径汇总 ===== -->
+<div class="diagram-section" id="error-flow">
+  <div class="section-title">
+    错误路径汇总
+    <span class="badge badge-red">Sentinel + 快速失败</span>
+  </div>
+  <pre class="mermaid">
+flowchart LR
+    subgraph Errors [三条错误路径 → 均返回 422 ERROR]
+      direction TB
+      E1["客户不存在<br/>findCustomer → sentinel<br/>跳过 LLM 调用<br/>→ CustomerNotFound @State"] --> E422([422 ERROR])
+      E2["LLM 无法提取<br/>VehicleInfo.isFailed<br/>无品牌/型号<br/>→ ExtractionFailed @State"] --> E422
+      E3["车辆未找到<br/>三级查找均未命中<br/>Vehicle.lookupFailed<br/>→ VehicleLookupError @State"] --> E422
+    end
+
+    Errors -- "GlobalExceptionHandler<br/>handleBizException" --> HTTP422[HTTP 422<br/>Unprocessable Entity]
+  </pre>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad:true, theme:'dark',
+    themeVariables:{
+      darkMode:true, background:'#16213e', primaryColor:'#0f3460', primaryTextColor:'#e0e0e0',
+      primaryBorderColor:'#3a3a5c', lineColor:'#42a5f5', secondaryColor:'#1a1a2e', tertiaryColor:'#0f3460',
+      noteBkgColor:'#1e3a5f', noteTextColor:'#bbb', fontSize:'14px'
+    }
+  });
+</script>
+</body>
+</html>

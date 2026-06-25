@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVP3 智能核保 — 时序图</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --card-bg: #16213e;
+            --text: #e0e0e0;
+            --accent: #0f3460;
+            --border: #3a3a5c;
+            --green: #4caf50;
+            --orange: #ff9800;
+            --red: #f44336;
+            --blue: #42a5f5;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 24px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 28px;
+            color: #fff;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+        .diagram-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+            border: 1px solid var(--border);
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .badge {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .badge-happy { background: rgba(76,175,80,0.2); color: var(--green); }
+        .badge-error { background: rgba(244,67,54,0.2); color: var(--red); }
+        .badge-action { background: rgba(66,165,245,0.2); color: var(--blue); }
+        .badge-warn { background: rgba(255,152,0,0.2); color: var(--orange); }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+        }
+        .legend {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+
+<h1>MVP3 UnderwritingAgent 智能核保 — 时序图</h1>
+<p class="subtitle">分支 feature/spec3 · 2026-06-25 · 覆盖核保申请 / 人工审批 / 支付签单 / 保单查询</p>
+
+<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> 正常路径</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> 错误路径</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> 异步/编排</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> 条件分支</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 主核保流程 — 正常路径 (US-U1, US-U2, US-U3) -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        核保申请 — 正常路径
+        <span class="badge badge-happy">US-U1 / US-U2 / US-U3</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    actor User as 用户
+    participant Ctrl as InsuranceController<br/>/api/insurance/underwrite
+    participant AS as AgentService
+    participant Platform as Embabel Platform
+    participant UA as UnderwritingAgent<br/>@Agent(UTILITY)
+    participant LLM as DeepSeek LLM<br/>(fast)
+    participant DS as DataService
+    participant RS as RiskCalculationService
+    participant PS as PremiumCalculationService
+    participant QR as QuoteRepository
+    participant DB as H2 Database
+
+    User->>Ctrl: POST /api/insurance/underwrite<br/>{userId, userInput}
+    activate Ctrl
+    Ctrl->>Ctrl: @PreAuthorize 权限校验<br/>hasAuthority('underwriting:write')
+    Ctrl->>AS: processUnderwriting(userId, userInput)
+    activate AS
+
+    AS->>Platform: findAgent(UnderwritingAgent.class)
+    Platform-->>AS: agent 实例
+
+    AS->>Platform: createAgentProcessFrom(agent, options, input)
+    Platform-->>AS: AgentProcess
+
+    AS->>AS: process.blackboard.bind("userId", userId)
+    AS->>AS: CompletableFuture.supplyAsync(process::run)<br/>ThreadPoolExecutor(2,4,60s,Queue100)
+
+    Note over AS,UA: === Agent 流水线开始 (PlannerType.UTILITY) ===
+
+    AS->>UA: [1] extractVehicleInfo(input, context)
+    activate UA
+    UA->>UA: 从 Blackboard 读取 userId
+    UA->>DS: findCustomer(userId) 前置检查
+    DS->>DB: SELECT * FROM customer WHERE user_id=?
+    DB-->>DS: Customer 实体
+    DS-->>UA: Customer (非 sentinel)
+    UA->>LLM: generateText(提取车辆信息 prompt)
+    LLM-->>UA: JSON {"brand":"Toyota","model":"RAV4","licensePlate":"LOW001"}
+    UA->>UA: 反序列化为 VehicleInfo
+    UA-->>AS: VehicleInfo
+    deactivate UA
+
+    AS->>UA: [2] lookupCustomer(input, context)
+    activate UA
+    UA->>DS: findCustomer(userId)
+    DS->>DB: SELECT * FROM customer WHERE user_id=?
+    DB-->>DS: Customer 实体
+    DS-->>UA: Customer
+    UA-->>AS: Customer
+    deactivate UA
+
+    AS->>UA: [3] lookupVehicle(vehicleInfo, customer, context)
+    activate UA
+    UA->>DS: findVehicle(info, customer)
+    activate DS
+    DS->>DB: 1) licensePlate 精确匹配<br/>SELECT * FROM vehicle WHERE license_plate=?
+    DB-->>DS: Vehicle + 归属校验
+    alt 车牌未命中
+        DS->>DB: 2) brand + model 匹配<br/>SELECT * FROM vehicle WHERE customer_id=?
+        DB-->>DS: 客户名下车辆列表, 逐一匹配品牌型号
+        alt 品牌型号未命中
+            DS->>DS: 3) 客户名下唯一车辆?<br/>size==1 → 返回唯一车辆
+        end
+    end
+    DS-->>UA: Vehicle / Vehicle.lookupFailed()
+    deactivate DS
+    UA-->>AS: Vehicle
+    deactivate UA
+
+    AS->>UA: [4] assessRisk(customer, vehicle, context)
+    activate UA
+    UA->>UA: sentinel 检查 (Customer/Vehicle)
+    UA->>RS: calculate(customer, vehicle)
+    activate RS
+    RS->>RS: 6因子评分:<br/>年龄 + 驾龄 + 事故×15<br/>+ 车龄 + 车辆价值<br/>→ 钳制[0,100]
+    RS-->>UA: riskScore (double)
+    deactivate RS
+
+    UA->>PS: calculate(vehicleValue, riskScore, "COMPREHENSIVE")
+    activate PS
+    PS->>PS: 车价×2%×风险系数×险种系数<br/>BigDecimal.setScale(2, HALF_UP)
+    PS-->>UA: premium (double)
+    deactivate PS
+
+    alt riskScore ≤ 60
+        UA-->>AS: LowRiskQuote(customer, vehicle, riskScore, premium)
+        Note over UA: @State 路由 → LowRiskQuote.execute()
+        UA->>QR: save(Quote{status=APPROVED})
+        QR->>DB: INSERT INTO quote
+        DB-->>QR: quoteId
+        QR-->>UA: Quote
+
+    else 60 < riskScore < 80
+        UA-->>AS: MediumRiskReview(customer, vehicle, riskScore, premium)
+        Note over UA: @State 路由 → MediumRiskReview.execute()
+        UA->>QR: save(Quote{status=REFERRED, expiresAt=+30d})
+        QR->>DB: INSERT INTO quote
+        DB-->>QR: quoteId
+        QR-->>UA: Quote
+
+    else riskScore ≥ 80
+        UA-->>AS: HighRiskDecline(customer, vehicle, riskScore, premium)
+        Note over UA: @State 路由 → HighRiskDecline.execute()
+        UA->>QR: save(Quote{status=DECLINED, rejectionReason})
+        QR->>DB: INSERT INTO quote
+        DB-->>QR: quoteId
+        QR-->>UA: Quote
+    end
+    deactivate UA
+
+    Note over AS,UA: === Agent 流水线结束 (@AchievesGoal) ===
+
+    AS->>AS: processResult.last(UnderwritingResult.class)
+    AS-->>Ctrl: UnderwritingResult{status, riskScore, premium, message}
+    deactivate AS
+
+    alt status == APPROVED / REFERRED / DECLINED
+        Ctrl-->>User: 200 OK + UnderwritingResult JSON
+    else status == ERROR
+        Ctrl-->>User: 422 Unprocessable Entity + UnderwritingResult JSON
+    end
+    deactivate Ctrl
+    </pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- 核保流程 — 错误路径 -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        核保申请 — 错误路径
+        <span class="badge badge-error">快速失败 / Sentinel</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    actor User as 用户
+    participant Ctrl as InsuranceController
+    participant AS as AgentService
+    participant UA as UnderwritingAgent
+    participant LLM as DeepSeek LLM
+    participant DS as DataService
+    participant DB as H2 Database
+
+    User->>Ctrl: POST /api/insurance/underwrite
+
+    rect rgb(60, 20, 20)
+        Note over User,DB: 路径A: 客户不存在 (unknown-user)
+
+        Ctrl->>AS: processUnderwriting("unknown-user", "Toyota RAV4")
+        AS->>UA: [1] extractVehicleInfo
+        UA->>DS: findCustomer("unknown-user") 前置检查
+        DS->>DB: SELECT * FROM customer WHERE user_id='unknown-user'
+        DB-->>DS: empty
+        DS-->>UA: Customer.lookupFailed()
+        UA->>UA: 跳过 LLM 调用（快速失败）
+        UA->>UA: context.bind("underwriting_error", "客户不存在")
+        UA-->>AS: VehicleInfo.EXTRACTION_FAILED
+        AS->>UA: [4] assessRisk → check sentinel
+        UA-->>AS: CustomerNotFound(errorMsg)
+        UA->>UA: CustomerNotFound.execute() → UnderwritingResult.error()
+        AS-->>Ctrl: UnderwritingResult{status=ERROR, message="客户不存在"}
+        Ctrl-->>User: 422 Unprocessable Entity
+    end
+
+    rect rgb(60, 40, 20)
+        Note over User,DB: 路径B: LLM 无法提取车辆信息 (无关键词输入)
+
+        Ctrl->>AS: processUnderwriting("low-risk-user", "你好，天气不错")
+        AS->>UA: [1] extractVehicleInfo
+        UA->>DS: findCustomer("low-risk-user") → 存在
+        UA->>LLM: generateText(提取车辆信息)
+        LLM-->>UA: {"brand":"", "model":"", "licensePlate":null}
+        UA->>UA: info.isFailed() == true
+        UA->>UA: context.bind("underwriting_error", "无法识别车辆信息")
+        UA-->>AS: VehicleInfo.EXTRACTION_FAILED
+        AS->>UA: [4] assessRisk → check underwriting_error
+        UA-->>AS: ExtractionFailed(errorMsg)
+        UA->>UA: ExtractionFailed.execute() → UnderwritingResult.error()
+        AS-->>Ctrl: UnderwritingResult{status=ERROR}
+        Ctrl-->>User: 422 Unprocessable Entity
+    end
+
+    rect rgb(60, 20, 40)
+        Note over User,DB: 路径C: 车辆未找到 (用户输入了不存在的车牌)
+
+        Ctrl->>AS: processUnderwriting("low-risk-user", "京A99999 上保险")
+        AS->>UA: [1] extractVehicleInfo → VehicleInfo{brand="", plate="京A99999"}
+        AS->>UA: [2] lookupCustomer → Customer
+        AS->>UA: [3] lookupVehicle
+        UA->>DS: findVehicle(info, customer)
+        DS->>DB: licensePlate 精确 → 品牌型号 → 唯一车辆
+        DB-->>DS: 三级均未命中
+        DS-->>UA: Vehicle.lookupFailed()
+        UA->>UA: context.bind("underwriting_error", "车辆未找到")
+        UA-->>AS: Vehicle (sentinel)
+        AS->>UA: [4] assessRisk → Vehicle.isLookupFailed()
+        UA-->>AS: VehicleLookupError(errorMsg)
+        UA->>UA: VehicleLookupError.execute() → UnderwritingResult.error()
+        AS-->>Ctrl: UnderwritingResult{status=ERROR}
+        Ctrl-->>User: 422 Unprocessable Entity
+    end
+    </pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- 人工审批流程 -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        人工审批 REFERRED 报价单
+        <span class="badge badge-warn">underwriting:approve 权限</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    actor Underwriter as 核保员
+    participant Ctrl as InsuranceController<br/>/api/insurance/quotes/{id}/approve
+    participant AS as AgentService
+    participant QR as QuoteRepository
+    participant DB as H2 Database
+
+    Underwriter->>Ctrl: POST /api/insurance/quotes/2/approve<br/>{overridePremiumAmount: 5000}
+    activate Ctrl
+    Ctrl->>Ctrl: @PreAuthorize<br/>hasAuthority('underwriting:approve')
+
+    Ctrl->>AS: approveQuote(2, 5000.0)
+    activate AS
+
+    AS->>QR: findById(2)
+    QR->>DB: SELECT * FROM quote WHERE id=2
+    DB-->>QR: Quote{id=2, status=REFERRED, expiresAt=...}
+    QR-->>AS: Quote
+
+    alt status != REFERRED
+        AS-->>Ctrl: throw BizException("仅转人工状态的报价单可审批")
+        Ctrl-->>Underwriter: 400 Bad Request
+    else expiresAt < now
+        AS-->>Ctrl: throw BizException("报价单已过期")
+        Ctrl-->>Underwriter: 400 Bad Request
+    else 校验通过
+        AS->>AS: quote.setPremiumAmount(5000.0)<br/>quote.setStatus(APPROVED)
+        AS->>QR: save(quote)
+        QR->>DB: UPDATE quote SET status='APPROVED', premium_amount=5000
+        DB-->>QR: OK
+        QR-->>AS: Quote (updated)
+        AS-->>Ctrl: Quote{status=APPROVED, premiumAmount=5000}
+        deactivate AS
+        Ctrl-->>Underwriter: 200 OK + ApproveQuoteResponse<br/>{quoteId, status="APPROVED", premiumAmount, message}
+    end
+    deactivate Ctrl
+    </pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- 支付签单流程 -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        支付保费 + 签发保单
+        <span class="badge badge-happy">US-U5</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    actor User as 用户
+    participant Ctrl as InsuranceController<br/>/api/insurance/pay
+    participant PaySvc as PaymentService
+    participant QR as QuoteRepository
+    participant PR as PolicyRepository
+    participant DB as H2 Database
+
+    User->>Ctrl: POST /api/insurance/pay<br/>{quoteId: 1}
+    activate Ctrl
+    Ctrl->>Ctrl: @PreAuthorize<br/>hasAuthority('underwriting:write')
+    Ctrl->>PaySvc: pay(1)
+    activate PaySvc
+
+    PaySvc->>QR: findById(1)
+    QR->>DB: SELECT * FROM quote WHERE id=1
+    DB-->>QR: Quote{id=1, status=APPROVED, premiumAmount=4800, ...}
+    QR-->>PaySvc: Quote
+
+    alt quote 不存在
+        PaySvc-->>Ctrl: throw BizException("报价单不存在")
+        Ctrl-->>User: 400 Bad Request
+    else status != APPROVED
+        PaySvc-->>Ctrl: throw BizException("仅已批准的报价单可支付")
+        Ctrl-->>User: 400 Bad Request
+    else expiresAt < now
+        PaySvc-->>Ctrl: throw BizException("报价单已过期")
+        Ctrl-->>User: 400 Bad Request
+    else 校验通过
+        Note over PaySvc: 模拟支付处理 (log.info)
+
+        PaySvc->>PaySvc: new Policy()<br/>- policyNumber: POL-{ts}-{6位随机}<br/>- customer/vehicle/coverageType<br/>- premiumAmount: 4800<br/>- effectiveDate: now()<br/>- expirationDate: +lengthOfYear()<br/>- status: ACTIVE
+
+        PaySvc->>PR: save(policy)
+        PR->>DB: INSERT INTO policy
+        DB-->>PR: Policy (persisted)
+        PR-->>PaySvc: Policy
+
+        PaySvc-->>Ctrl: Policy
+        deactivate PaySvc
+        Ctrl-->>User: 200 OK + PolicyResponse<br/>{policyNumber, customerName, vehicleModel,<br/>coverageType, premiumAmount, effectiveDate, ...}
+    end
+    deactivate Ctrl
+    </pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- 保单查询流程 -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        保单查询
+        <span class="badge badge-action">US-U4</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    actor User as 用户
+    participant Ctrl as InsuranceController
+    participant PolSvc as PolicyService
+    participant PR as PolicyRepository
+    participant DB as H2 Database
+
+    rect rgb(20, 40, 60)
+        Note over User,DB: 场景A: 按 userId 查询保单列表
+        User->>Ctrl: GET /api/insurance/policies?userId=low-risk-user
+        activate Ctrl
+        Ctrl->>Ctrl: @PreAuthorize hasAuthority('policies:read')
+        Ctrl->>PolSvc: findByUserId("low-risk-user")
+        activate PolSvc
+        PolSvc->>PR: findByCustomer_UserId("low-risk-user")
+        PR->>DB: SELECT p.* FROM policy p<br/>JOIN customer c ON p.customer_id=c.id<br/>WHERE c.user_id='low-risk-user'
+        DB-->>PR: List&lt;Policy&gt;
+        PR-->>PolSvc: List&lt;Policy&gt; (or empty list)
+        PolSvc-->>Ctrl: List&lt;Policy&gt;
+        deactivate PolSvc
+        Ctrl->>Ctrl: stream().map(PolicyResponse::from)
+        Ctrl-->>User: 200 OK + List&lt;PolicyResponse&gt;
+        deactivate Ctrl
+    end
+
+    rect rgb(20, 60, 40)
+        Note over User,DB: 场景B: 按 policyNumber 查询保单详情
+        User->>Ctrl: GET /api/insurance/policies/POL-170001-ABC123
+        activate Ctrl
+        Ctrl->>Ctrl: @PreAuthorize hasAuthority('policies:read')
+        Ctrl->>PolSvc: findByPolicyNumber("POL-170001-ABC123")
+        activate PolSvc
+        PolSvc->>PR: findByPolicyNumber("POL-170001-ABC123")
+        PR->>DB: SELECT * FROM policy WHERE policy_number=?
+        DB-->>PR: Optional&lt;Policy&gt;
+        PR-->>PolSvc: Optional&lt;Policy&gt;
+        alt 保单存在
+            PolSvc-->>Ctrl: Policy
+            Ctrl->>Ctrl: PolicyResponse.from(policy)
+            Ctrl-->>User: 200 OK + PolicyResponse
+        else 保单不存在
+            PolSvc-->>Ctrl: throw BizException("保单不存在")
+            Ctrl->>Ctrl: GlobalExceptionHandler → 404
+            Ctrl-->>User: 404 Not Found
+        end
+        deactivate PolSvc
+        deactivate Ctrl
+    end
+    </pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- 超时与 StuckHandler 流程 -->
+<!-- ============================================================ -->
+<div class="diagram-section">
+    <div class="section-title">
+        超时保护与 Blackboard 错误回退
+        <span class="badge badge-warn">120s 超时 · StuckHandler</span>
+    </div>
+    <pre class="mermaid">
+sequenceDiagram
+    participant AS as AgentService
+    participant Future as CompletableFuture
+    participant UA as UnderwritingAgent
+    participant Stuck as StuckHandler
+
+    AS->>AS: ThreadPoolExecutor(2,4,60s,Queue100)
+    AS->>Future: supplyAsync(process::run)
+    activate Future
+
+    alt 正常完成 (≤120s)
+        Future-->>AS: ProcessResult (completed)
+        AS->>AS: completed.last(UnderwritingResult.class)
+        AS->>AS: return result
+
+    else LLM 调用超时 / Agent 卡住
+        Note over Future: future.get(120, SECONDS)
+        Future-->>AS: TimeoutException
+        AS->>Future: cancel(true)
+        AS->>UA: handleStuck(agentProcess)
+        activate UA
+        UA->>UA: log.warn("超时 STUCK — Blackboard entries")
+        UA-->>AS: StuckHandlerResult(NO_RESOLUTION)
+        deactivate UA
+
+        AS->>AS: 从 Blackboard 回退读取<br/>process.blackboard.get("underwriting_error")
+        AS->>AS: 包装为 UnderwritingResult.error()
+        Note over AS: 返回 ERROR 而非抛出异常，<br/>保证 Controller 总能拿到响应体
+    end
+    deactivate Future
+    </pre>
+</div>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        themeVariables: {
+            darkMode: true,
+            background: '#16213e',
+            primaryColor: '#0f3460',
+            primaryTextColor: '#e0e0e0',
+            primaryBorderColor: '#3a3a5c',
+            lineColor: '#42a5f5',
+            secondaryColor: '#1a1a2e',
+            tertiaryColor: '#0f3460',
+            noteBkgColor: '#1e3a5f',
+            noteTextColor: '#bbb',
+            actorBkg: '#0f3460',
+            actorBorder: '#3a3a5c',
+            actorTextColor: '#e0e0e0',
+            actorLineColor: '#555',
+            signalColor: '#e0e0e0',
+            signalTextColor: '#e0e0e0',
+            labelBoxBkgColor: '#0f3460',
+            labelBoxBorderColor: '#3a3a5c',
+            labelTextColor: '#e0e0e0',
+            loopTextColor: '#e0e0e0',
+            activationBkgColor: '#1a3a5c',
+            activationBorderColor: '#42a5f5',
+            sequenceNumberColor: '#fff',
+            fontSize: '14px'
+        },
+        sequence: {
+            showSequenceNumbers: false,
+            actorMargin: 50,
+            boxMargin: 8,
+            boxTextMargin: 4,
+            messageMargin: 40,
+            mirrorActors: false,
+            width: 180,
+            useMaxWidth: true,
+            wrap: true,
+            wrapPadding: 16
+        }
+    });
+</script>
+
+</body>
+</html>

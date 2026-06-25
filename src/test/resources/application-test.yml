@@ -1,0 +1,6 @@
+embabel:
+  models:
+    default-llm: deepseek-chat
+    llms:
+      best: deepseek-reasoner
+      cheapest: deepseek-chat

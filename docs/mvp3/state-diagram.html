@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVP3 核保 — 状态机图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#1a1a2e; --card-bg:#16213e; --text:#e0e0e0; --border:#3a3a5c; --green:#4caf50; --orange:#ff9800; --red:#f44336; --blue:#42a5f5; --purple:#ab47bc; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:24px; }
+  h1 { text-align:center; margin-bottom:8px; font-size:26px; color:#fff; }
+  .subtitle { text-align:center; color:#888; margin-bottom:32px; font-size:14px; }
+  .diagram-section { background:var(--card-bg); border-radius:12px; padding:24px; margin-bottom:32px; border:1px solid var(--border); }
+  .section-title { font-size:18px; font-weight:600; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .badge { font-size:11px; padding:3px 10px; border-radius:12px; font-weight:500; }
+  .badge-green { background:rgba(76,175,80,0.2); color:var(--green); }
+  .badge-purple { background:rgba(171,71,188,0.2); color:var(--purple); }
+  .badge-blue { background:rgba(66,165,245,0.2); color:var(--blue); }
+  .mermaid { display:flex; justify-content:center; }
+</style>
+</head>
+<body>
+
+<h1>MVP3 智能核保 — 状态机图</h1>
+<p class="subtitle">Quote 报价单状态变迁 + Policy 保单生命周期</p>
+
+<!-- ===== Quote 状态变迁 ===== -->
+<div class="diagram-section">
+  <div class="section-title">
+    Quote 报价单 — 状态变迁
+    <span class="badge badge-green">核心实体</span>
+  </div>
+  <pre class="mermaid">
+stateDiagram-v2
+    direction LR
+
+    [*] --> APPROVED : riskScore ≤ 60\nLowRiskQuote.execute()\n创建 Quote + 持久化
+    [*] --> REFERRED : 60 < riskScore < 80\nMediumRiskReview.execute()\n创建 Quote + 持久化
+    [*] --> DECLINED : riskScore ≥ 80\nHighRiskDecline.execute()\n创建 Quote + 持久化(含拒绝原因)
+
+    REFERRED --> APPROVED : 核保员人工审批\nAgentService.approveQuote()\n可选覆盖 premiumAmount
+
+    APPROVED --> [*] : PaymentService.pay()\n支付成功 → 创建 Policy\nQuote 状态保持不变
+
+    note right of APPROVED
+      可支付状态
+      有效期 30 天
+      过期后不可支付
+    end note
+
+    note right of REFERRED
+      待人工审核
+      有效期 30 天
+      过期后不可审批
+    end note
+
+    note right of DECLINED
+      终态，不可逆转
+      含 rejectionReason 字段
+      记录各因子扣分明细
+    end note
+  </pre>
+</div>
+
+<!-- ===== Policy 生命周期 ===== -->
+<div class="diagram-section">
+  <div class="section-title">
+    Policy 保单 — 生命周期
+    <span class="badge badge-purple">实体状态</span>
+  </div>
+  <pre class="mermaid">
+stateDiagram-v2
+    direction LR
+
+    [*] --> ACTIVE : PaymentService.pay()\n创建 Policy
+    ACTIVE --> EXPIRED : expirationDate 到达\n系统自动判断
+    ACTIVE --> CANCELLED : 用户退保(预留)\n本期未实现
+
+    note right of ACTIVE
+      policyNumber: POL-{ts}-{6位随机}
+      effectiveDate: 签发时间
+      expirationDate: +lengthOfYear()
+      coverageType 来自 Quote
+      premiumAmount 来自 Quote
+    end note
+  </pre>
+</div>
+
+<!-- ===== 完整端到端状态流转 ===== -->
+<div class="diagram-section">
+  <div class="section-title">
+    端到端状态流转（Quote + Policy 关联视图）
+    <span class="badge badge-blue">概览</span>
+  </div>
+  <pre class="mermaid">
+stateDiagram-v2
+    state 用户发起 {
+        [*] --> 核保申请
+    }
+
+    state UnderwritingAgent_核保 {
+        核保申请 --> LLM提取车辆信息
+        LLM提取车辆信息 --> 客户车辆查找
+        客户车辆查找 --> 6因子风险评估
+        6因子风险评估 --> 保费计算
+        保费计算 --> 阈值判定
+    }
+
+    state Quote_报价单 {
+        阈值判定 --> APPROVED : ≤60分
+        阈值判定 --> REFERRED : 61~79分
+        阈值判定 --> DECLINED : ≥80分
+
+        REFERRED --> APPROVED : 人工审批
+    }
+
+    state Policy_保单 {
+        APPROVED --> ACTIVE : 支付签单
+        ACTIVE --> [*] : 到期
+    }
+
+    state 错误路径 {
+        阈值判定 --> ERROR : 客户不存在
+        阈值判定 --> ERROR : 车辆未找到
+        阈值判定 --> ERROR : LLM提取失败
+    }
+  </pre>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad:true, theme:'dark',
+    themeVariables:{
+      darkMode:true, background:'#16213e', primaryColor:'#0f3460', primaryTextColor:'#e0e0e0',
+      primaryBorderColor:'#3a3a5c', lineColor:'#42a5f5', secondaryColor:'#1a1a2e', tertiaryColor:'#0f3460',
+      noteBkgColor:'#1e3a5f', noteTextColor:'#bbb', fontSize:'14px'
+    }
+  });
+</script>
+</body>
+</html>
