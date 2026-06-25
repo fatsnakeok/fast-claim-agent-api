@@ -149,6 +149,11 @@ src/main/java/com/fastclaim/
     └── LlmSelectionService.java       # LLM 路由选择
 ```
 
+## 文档
+
+- [Embabel 规划器介绍与项目选型](docs/embabel-planner-intro.md) — UTILITY / GOAP / SUPERVISOR 三种规划器对比，及本项目选择 UTILITY 的原因
+- [ER 图](docs/er-diagram.html) — 数据库实体关系图
+
 ## 配置要点
 
 ```yaml
