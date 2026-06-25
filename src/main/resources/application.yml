@@ -59,6 +59,29 @@ deepseek:
     base-url: https://api.deepseek.com
     model: deepseek-chat
 
+underwriting:
+  agent:
+    timeout-seconds: 120
+    thread-pool:
+      core-size: 2
+      max-size: 4
+
+risk:
+  thresholds:
+    low: 60
+    high: 80
+
+premium:
+  base-rate: 0.02
+  risk-coefficients:
+    low: 0.8
+    medium: 1.0
+    high: 1.5
+  coverage-coefficients:
+    THIRD_PARTY: 0.5
+    THIRD_PARTY_FIRE_THEFT: 0.75
+    COMPREHENSIVE: 1.0
+
 server:
   port: 8080
 

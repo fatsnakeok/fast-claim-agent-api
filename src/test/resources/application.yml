@@ -18,6 +18,7 @@ embabel:
   models:
     default-llm: deepseek-chat
     llms:
+      test-llm: deepseek-chat
       fast: deepseek-chat
       balanced: deepseek-chat
       powerful: deepseek-reasoner
@@ -32,13 +33,13 @@ embabel:
           connect-timeout: 30s
           read-timeout: 120s
 
-claim:
+insurance:
   rag:
     documents-path: classpath:documents/
     documents: claims_guide.md,faq.md
     auto-ingest: false
     lucene:
-      name: claim-lucene
+      name: insurance-lucene
       chunk-size: 1000
       chunk-overlap: 200
 

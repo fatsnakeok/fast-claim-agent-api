@@ -1,5 +1,6 @@
 package com.fastclaim.controller;
 
+import com.fastclaim.service.BizException;
 import com.fastclaim.service.ChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,23 @@ public class GlobalExceptionHandler {
             ChatService.SessionExpiredException e) {
         return ResponseEntity.status(410).body(Map.of(
                 "error", "SESSION_EXPIRED",
+                "message", e.getMessage()
+        ));
+    }
+
+    /**
+     * 业务异常 — 按场景映射 HTTP 状态码
+     */
+    @ExceptionHandler(BizException.class)
+    public ResponseEntity<Map<String, Object>> handleBizException(BizException e) {
+        log.warn("业务异常 — code: {}, message: {}", e.getErrorCode(), e.getMessage());
+        int httpStatus = switch (e.getErrorCode()) {
+            case "NOT_FOUND" -> 404;
+            case "EXPIRED", "INVALID_STATUS" -> 400;
+            default -> 400;
+        };
+        return ResponseEntity.status(httpStatus).body(Map.of(
+                "error", e.getErrorCode(),
                 "message", e.getMessage()
         ));
     }

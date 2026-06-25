@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface PolicyRepository extends JpaRepository<Policy, Long> {
     Optional<Policy> findByPolicyNumber(String policyNumber);
     List<Policy> findByCustomerId(Long customerId);
+    List<Policy> findByCustomer_UserId(String userId);
 }
